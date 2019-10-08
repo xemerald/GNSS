@@ -19,7 +19,7 @@ int main( int argc, char **argv )
 	x = atof(argv[1]);
 	y = atof(argv[2]);
 	z = atof(argv[3]);
-/* Derive the circular orbit period */
+/* Derive the geographic coordinate */
 	res = xyz2geocd( x, y, z );
 	printf("Geo Position: Longitude: %lf, Latitude: %lf\n", res.longitude, res.latitude);
 
