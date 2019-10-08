@@ -10,22 +10,19 @@ FCOMPL = gfortran
 
 L = ../lib
 
-LLIBS = $L/doppler.o $L/orbit.o
+LLIBS = $L/xyz2geoc.o
 
 CPGPLOT_LIB = /home/benyang/ew/pgplot/libcpgplot.a /home/benyang/ew/pgplot/libpgplot.a
 
-all: hw1_1 hw1_2
+all: hw2_1
 
-hw1_1: $(LIBS) $(LLIBS)
-	$(CC) $(CFLAGS) -o ./hw1_1 hw1_1.c $(LIBS) $(LLIBS)
+hw2_1: $(LIBS) $(LLIBS)
+	$(CC) $(CFLAGS) -o ./hw2_1 hw2_1.c $(LIBS) $(LLIBS)
 
-hw1_2: hw1_2.o $(LIBS) $(LLIBS)
-	$(FCOMPL) -o hw1_2 hw1_2.o $(LLIBS) $(CPGPLOT_LIB) $(LIBS)
-	export PGPLOT_DIR="../data/"
 
 # Clean-up rules
 clean:
 	rm -f a.out core *.o *.obj *% *~
 
 clean_bin:
-	rm -f ./hw1_1 ./hw1_2
+	rm -f ./hw2_1

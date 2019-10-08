@@ -4,6 +4,8 @@
 
 /* Earth-related constants */
 #define  EARTH_RAD      6.371e+6
+#define  EARTH_LAXIS    6.378137e+6
+#define  EARTH_INVFLAT  298.257223563
 #define  EARTH_MASS     5.9722e+24
 
 /* Gravity-related constants */
