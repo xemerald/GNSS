@@ -10,7 +10,7 @@ FCOMPL = gfortran
 
 L = ../lib
 
-LLIBS = $L/xyz2geoc.o
+LLIBS = $L/xyz2geoc.o $L/matrix.o
 
 CPGPLOT_LIB = /home/benyang/ew/pgplot/libcpgplot.a /home/benyang/ew/pgplot/libpgplot.a
 
@@ -21,6 +21,10 @@ hw2_1: $(LIBS) $(LLIBS)
 
 hw2_3: hw2_3.o $(LIBS) $(LLIBS)
 	$(FCOMPL) -o hw2_3 hw2_3.o $(LLIBS) $(CPGPLOT_LIB) $(LIBS)
+	export PGPLOT_DIR="../data/"
+	
+hw2_3_matrix: hw2_3_matrix.o $(LIBS) $(LLIBS)
+	$(FCOMPL) -o hw2_3_matrix hw2_3_matrix.o $(LLIBS) $(CPGPLOT_LIB) $(LIBS)
 	export PGPLOT_DIR="../data/"
 	
 # Clean-up rules
