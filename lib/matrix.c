@@ -292,6 +292,45 @@ MATRIX *matrix_assign_diag( MATRIX *dest, const double *src, const int data_size
 	return NULL;
 }
 
+MATRIX *matrix_apply_all( MATRIX *dest, double (*func)( const double ) ) {
+	int i;
+
+	for ( i=0; i<dest->total; i++ )
+		dest->element[i] = func(dest->element[i]);
+
+	return dest;
+}
+
+MATRIX *matrix_apply_row( MATRIX *dest, double (*func)( const double ), int row_index ) {
+	int j;
+
+	row_index--;
+	for ( j=0; j<dest->j; j++ ) dest->element[row_index * dest->j + j] = func(dest->element[row_index * dest->j + j]);
+
+	return dest;
+}
+
+MATRIX *matrix_apply_col( MATRIX *dest, double (*func)( const double ), int col_index ) {
+	int i;
+
+	col_index--;
+	for ( i=0; i<dest->i; i++ ) dest->element[i * dest->j + col_index] = func(dest->element[i * dest->j + col_index]);
+
+	return dest;
+}
+
+MATRIX *matrix_apply_diag( MATRIX *dest, double (*func)( const double ) ) {
+	int i;
+
+	if ( matrix_square( dest ) )
+		for ( i=0; i<dest->i; i++ )
+			dest->element[i * dest->j + i] = func(dest->element[i * dest->j + i]);
+	else
+		return NULL;
+
+	return dest;
+}
+
 double *matrix_extract_seq( const MATRIX *src, double *dest, const int dest_size ) {
 	if ( src->total <= dest_size ) {
 		memcpy(dest, src->element, dest_size * sizeof(double));

@@ -7,8 +7,6 @@
 #include <formulas.h>
 #include <matrix.h>
 
-MATRIX *least_square_matrix( const MATRIX *, const MATRIX * );
-
 int main( int argc, char **argv )
 {
 	int    i;

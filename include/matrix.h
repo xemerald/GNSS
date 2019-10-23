@@ -22,6 +22,11 @@ MATRIX *matrix_assign_row( MATRIX *, const double *, int, const int );
 MATRIX *matrix_assign_col( MATRIX *, const double *, int, const int );
 MATRIX *matrix_assign_diag( MATRIX *, const double *, const int );
 
+MATRIX *matrix_apply_all( MATRIX *, double (*)( const double ) );
+MATRIX *matrix_apply_row( MATRIX *, double (*)( const double ), int );
+MATRIX *matrix_apply_col( MATRIX *, double (*)( const double ), int );
+MATRIX *matrix_apply_diag( MATRIX *, double (*)( const double ) );
+
 double *matrix_extract_seq( const MATRIX *, double *, const int );
 
 double matrix_determinant( const MATRIX * );
