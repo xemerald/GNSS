@@ -36,7 +36,6 @@ int main( int argc, char **argv )
 	avely = atof(argv[4]);
 	fill_value( input_array, avelx - atof(argv[7]), avely - atof(argv[8]), avelx - atof(argv[11]), avely - atof(argv[12]) );
 	matrix_assign_col( d, input_array, 1, 4 );
-	printf("flag\n");
 	blat = atof(argv[5]);
 	blon = atof(argv[6]);
 	delta_x = coor2distf( alat, alon, alat, blon ) * 10.0; /* unit: mm */
@@ -60,7 +59,7 @@ int main( int argc, char **argv )
 
 	matrix_extract_seq( m, input_array, 4 );
 
-	for ( i=0; i<4; i++ ) printf("%.3e mm/year\n", input_array[i]);
+	for ( i=0; i<4; i++ ) printf("%.3e strain\n", input_array[i]);
 
 	matrix_free( d );
 	matrix_free( ig );
