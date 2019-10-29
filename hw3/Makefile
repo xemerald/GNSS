@@ -20,6 +20,9 @@ hw3_1: hw3_1.o $(LIBS) $(LLIBS)
 	$(FCOMPL) -o hw3_1 hw3_1.o $(LLIBS) $(CPGPLOT_LIB) $(LIBS)
 	export PGPLOT_DIR="../data/"
 
+hw3_2: hw3_2.o $(LIBS) $(LLIBS)
+	$(CC) $(CFLAGS) -o hw3_2 hw3_2.o $(LLIBS) $(LIBS)
+
 # Clean-up rules
 clean:
 	rm -f a.out core *.o *.obj *% *~

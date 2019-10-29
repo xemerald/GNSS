@@ -76,9 +76,10 @@ MATRIX *matrix_mul( const MATRIX *a, const MATRIX *b ) {
 
 		for ( i=0; i<a->i; i++ ) {
 			for ( j=0; j<b->j; j++ ) {
-				res->element[i*(b->j) + j] = 0.0;
+				res->element[i * b->j + j] = 0.0;
 				for ( k=0; k<a->j; k++ ) {
-					res->element[i * b->j + j] += a->element[i * a->j + k] * b->element[k * b->j + j];
+					if ( fabs(a->element[i * a->j + k]) > DBL_EPSILON && fabs(b->element[k * b->j + j]) > DBL_EPSILON )
+						res->element[i * b->j + j] += a->element[i * a->j + k] * b->element[k * b->j + j];
 				}
 			}
 		}
@@ -202,6 +203,7 @@ MATRIX *matrix_inverse( const MATRIX *a ) {
 	return res;
 }
 
+/**/
 MATRIX *matrix_div( const MATRIX *a, const MATRIX *b ) {
 	MATRIX *gt     = matrix_transpose( b );
 	MATRIX *gtg    = matrix_mul( gt, b );
