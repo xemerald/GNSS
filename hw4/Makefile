@@ -12,20 +12,14 @@ L = ../lib
 
 LLIBS = $L/xyz2geoc.o $L/matrix.o
 
-CPGPLOT_LIB = /home/benyang/ew/pgplot/libcpgplot.a /home/benyang/ew/pgplot/libpgplot.a
+all: hw4_2
 
-all: hw3_1
-
-hw3_1: hw3_1.o $(LIBS) $(LLIBS)
-	$(FCOMPL) -O3 -o hw3_1 hw3_1.o $(LLIBS) $(CPGPLOT_LIB) $(LIBS)
-	export PGPLOT_DIR="../data/"
-
-hw3_2: hw3_2.o $(LIBS) $(LLIBS)
-	$(CC) $(CFLAGS) -o hw3_2 hw3_2.o $(LLIBS) $(LIBS)
+hw4_2: hw4_2.o $(LIBS) $(LLIBS)
+	$(CC) $(CFLAGS) -o hw4_2 hw4_2.o $(LLIBS) $(LIBS)
 
 # Clean-up rules
 clean:
 	rm -f a.out core *.o *.obj *% *~
 
 clean_bin:
-	rm -f ./hw2_1 ./hw2_3
+	rm -f ./hw4_2

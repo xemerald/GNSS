@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
+#include <time.h>
 
 /* PGPLOT C library header */
 #include <cpgplot.h>
@@ -43,6 +44,8 @@ static double *InputTime   = NULL;
 static double *InputPos[3] = { NULL };
 static double *InputSig[3] = { NULL };
 
+struct timespec TT, TT2;            /* Nanosecond Timer */
+
 int main( int argc, char **argv )
 {
 	int     i, j, iter;
@@ -66,6 +69,7 @@ int main( int argc, char **argv )
 /**/
 	if ( arg_parse( argc, argv ) ) return -1;
 	total_param += 2 * EqCount;
+	clock_gettime(CLOCK_REALTIME, &TT);
 	//printf("There are total %d parameters!\n", total_param);
 /**/
 	output_array = (double *)malloc(sizeof(double)*DataCount);
@@ -187,13 +191,17 @@ int main( int argc, char **argv )
 			//printf("%lf ", output_array[i]);
 		//printf("\n");
 	}
+	cpgend();
 
 	free(output_array);
 	free(plot_x);
 	free(plot_y);
 	end_process();
 
-	cpgend();
+/* Nanosecond Timer */
+	clock_gettime(CLOCK_REALTIME, &TT2);
+	printf("Process Time: %.6lf sec\n", (TT2.tv_sec - TT.tv_sec) + (TT2.tv_nsec - TT.tv_nsec)*1.0e-9);
+
 	return 0;
 }
 

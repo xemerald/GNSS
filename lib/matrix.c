@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <math.h>
 #include <float.h>
 #include <matrix.h>
@@ -73,10 +74,8 @@ MATRIX *matrix_mul( const MATRIX *a, const MATRIX *b ) {
 
 	if ( a->j == b->i ) {
 		res = matrix_new( a->i, b->j );
-
 		for ( i=0; i<a->i; i++ ) {
 			for ( j=0; j<b->j; j++ ) {
-				res->element[i * b->j + j] = 0.0;
 				for ( k=0; k<a->j; k++ ) {
 					if ( fabs(a->element[i * a->j + k]) > DBL_EPSILON && fabs(b->element[k * b->j + j]) > DBL_EPSILON )
 						res->element[i * b->j + j] += a->element[i * a->j + k] * b->element[k * b->j + j];
