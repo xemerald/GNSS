@@ -9,7 +9,6 @@
 
 /**/
 static int arg_parse( int, char ** );
-static double *fill_value( double *, double, double, double, double );
 
 int main( int argc, char **argv )
 {
@@ -32,27 +31,28 @@ int main( int argc, char **argv )
 
 	alat  = atof(argv[1]);
 	alon  = atof(argv[2]);
-	avelx = atof(argv[3]);
-	avely = atof(argv[4]);
-	//fill_value( input_array, avelx - atof(argv[7]), avely - atof(argv[8]), avelx - atof(argv[11]), avely - atof(argv[12]) );
-	fill_value( input_array, avelx - atof(argv[7]), avely - atof(argv[8]), atof(argv[11]) - atof(argv[7]), atof(argv[12]) - atof(argv[8]) );
+	avelx = atof(argv[7]);
+	avely = atof(argv[8]);
+	matrix_prefill_array( input_array, 4,
+		avelx - atof(argv[3]), avely - atof(argv[4]), atof(argv[11]) - avelx, atof(argv[12]) - avelx );
 	matrix_assign_col( d, input_array, 1, 4 );
+
 	blat = atof(argv[5]);
 	blon = atof(argv[6]);
-	delta_x = coor2distf( alat, alon, alat, blon ) * 10.0 * ( alon < blon ? -1.0 : 1.0 ); /* unit: mm */
-	delta_y = coor2distf( alat, alon, blat, alon ) * 10.0 * ( alat < blat ? -1.0 : 1.0 ); /* unit: mm */
-	fill_value( input_array, delta_x, delta_y, 0.0, delta_y );
+	delta_x = coor2distf( blat, alon, blat, blon ) * 10.0 * ( blon > alon ? 1.0 : -1.0 ); /* unit: mm */
+	delta_y = coor2distf( alat, blon, blat, blon ) * 10.0 * ( blat > alat ? 1.0 : -1.0 ); /* unit: mm */
+	matrix_prefill_array( input_array, 4, delta_x, delta_y, 0.0, delta_y );
 	matrix_assign_row( g, input_array, 1, 4 );
-	fill_value( input_array, 0.0, delta_x, delta_y, -delta_x );
+	matrix_prefill_array( input_array, 4, 0.0, delta_x, delta_y, -delta_x );
 	matrix_assign_row( g, input_array, 2, 4 );
 
 	alat = atof(argv[9]);
 	alon = atof(argv[10]);
-	delta_x = coor2distf( alat, alon, alat, blon ) * 10.0 * ( alon < blon ? -1.0 : 1.0 ); /* unit: mm */
-	delta_y = coor2distf( alat, alon, blat, alon ) * 10.0 * ( alat < blat ? -1.0 : 1.0 ); /* unit: mm */
-	fill_value( input_array, delta_x, delta_y, 0.0, delta_y );
+	delta_x = coor2distf( blat, alon, blat, blon ) * 10.0 * ( blon < alon ? 1.0 : -1.0 ); /* unit: mm */
+	delta_y = coor2distf( alat, blon, blat, blon ) * 10.0 * ( blat < alat ? 1.0 : -1.0 ); /* unit: mm */
+	matrix_prefill_array( input_array, 4, delta_x, delta_y, 0.0, delta_y );
 	matrix_assign_row( g, input_array, 3, 4 );
-	fill_value( input_array, 0.0, delta_x, delta_y, -delta_x );
+	matrix_prefill_array( input_array, 4, 0.0, delta_x, delta_y, -delta_x );
 	matrix_assign_row( g, input_array, 4, 4 );
 
 	ig = matrix_inverse( g );
@@ -80,14 +80,4 @@ static int arg_parse( int argc, char **argv ) {
 	}
 
 	return 0;
-}
-
-static double *fill_value( double *dest, double val1, double val2, double val3, double val4 ) {
-
-	dest[0] = val1;
-	dest[1] = val2;
-	dest[2] = val3;
-	dest[3] = val4;
-
-	return dest;
 }

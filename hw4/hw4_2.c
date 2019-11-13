@@ -9,7 +9,6 @@
 
 /**/
 static int arg_parse( int, char ** );
-static double *fill_value( double *, double, double, double );
 
 int main( int argc, char **argv )
 {
@@ -18,6 +17,7 @@ int main( int argc, char **argv )
 	double ang;
 	double input_array[3];
 	double output_array[9];
+	const double ang90 = 0.5 * PI;
 
 	MATRIX *d  = NULL;
 	MATRIX *s  = NULL;
@@ -40,36 +40,36 @@ int main( int argc, char **argv )
 	axis = atoi(argv[7]);
 	ang  = atof(argv[8]) * PI / 180.0;
 
-	fill_value( input_array, Sxx, Sxy, Sxz );
+	matrix_prefill_array( input_array, 3, Sxx, Sxy, Sxz );
 	matrix_assign_row( s, input_array, 1, 3 );
-	fill_value( input_array, Sxy, Syy, Syz );
+	matrix_prefill_array( input_array, 3, Sxy, Syy, Syz );
 	matrix_assign_row( s, input_array, 2, 3 );
-	fill_value( input_array, Sxz, Syz, Szz );
+	matrix_prefill_array( input_array, 3, Sxz, Syz, Szz );
 	matrix_assign_row( s, input_array, 3, 3 );
 
 	switch ( axis ) {
 		case 0:
-			fill_value( input_array, Sxx, Sxy, Sxz );
+			matrix_prefill_array( input_array, 3, 1.0, 0.0, 0.0 );
 			matrix_assign_row( d, input_array, 1, 3 );
-			fill_value( input_array, Sxy, Syy, Syz );
+			matrix_prefill_array( input_array, 3, 0.0, cos(ang), cos(ang90 + ang) );
 			matrix_assign_row( d, input_array, 2, 3 );
-			fill_value( input_array, Sxz, Syz, Szz );
+			matrix_prefill_array( input_array, 3, 0.0, cos(ang90 - ang), cos(ang) );
 			matrix_assign_row( d, input_array, 3, 3 );
 			break;
 		case 1:
-			fill_value( input_array, cos(ang), 0.0, cos(0.5*PI + ang) );
+			matrix_prefill_array( input_array, 3, cos(ang), 0.0, cos(ang90 + ang) );
 			matrix_assign_row( d, input_array, 1, 3 );
-			fill_value( input_array, 0.0, 1.0, 0.0 );
+			matrix_prefill_array( input_array, 3, 0.0, 1.0, 0.0 );
 			matrix_assign_row( d, input_array, 2, 3 );
-			fill_value( input_array, cos(0.5*PI - ang), 0.0, cos(ang) );
+			matrix_prefill_array( input_array, 3, cos(ang90 - ang), 0.0, cos(ang) );
 			matrix_assign_row( d, input_array, 3, 3 );
 			break;
 		case 2:
-			fill_value( input_array, cos(ang), cos(0.5*PI + ang), 0.0 );
+			matrix_prefill_array( input_array, 3, cos(ang), cos(ang90 + ang), 0.0 );
 			matrix_assign_row( d, input_array, 1, 3 );
-			fill_value( input_array, cos(0.5*PI - ang), cos(ang), 0.0 );
+			matrix_prefill_array( input_array, 3, cos(ang90 - ang), cos(ang), 0.0 );
 			matrix_assign_row( d, input_array, 2, 3 );
-			fill_value( input_array, 0.0, 0.0, 1.0 );
+			matrix_prefill_array( input_array, 3, 0.0, 0.0, 1.0 );
 			matrix_assign_row( d, input_array, 3, 3 );
 			break;
 		default:
@@ -104,13 +104,4 @@ static int arg_parse( int argc, char **argv ) {
 	}
 
 	return 0;
-}
-
-static double *fill_value( double *dest, double val1, double val2, double val3 ) {
-
-	dest[0] = val1;
-	dest[1] = val2;
-	dest[2] = val3;
-
-	return dest;
 }

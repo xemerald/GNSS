@@ -27,8 +27,9 @@ MATRIX *matrix_apply_row( MATRIX *, double (*)( const double ), int );
 MATRIX *matrix_apply_col( MATRIX *, double (*)( const double ), int );
 MATRIX *matrix_apply_diag( MATRIX *, double (*)( const double ) );
 
+double *matrix_prefill_array( double *, int, ... );
 double *matrix_extract_seq( const MATRIX *, double *, const int );
 
-double matrix_determinant( const MATRIX * );
+double  matrix_determinant( const MATRIX * );
 
 void matrix_free( MATRIX * );

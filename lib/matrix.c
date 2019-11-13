@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <math.h>
 #include <float.h>
 #include <matrix.h>
@@ -331,6 +332,22 @@ MATRIX *matrix_apply_diag( MATRIX *dest, double (*func)( const double ) ) {
 
 	return dest;
 }
+
+double *matrix_prefill_array( double *dest, int data_size, ... ) {
+	va_list ap;
+	double  dval;
+	double *_dest = dest;
+
+	va_start(ap, data_size);
+	for ( ; data_size>0; data_size-- ) {
+		dval    = va_arg(ap, double);
+		*_dest++ = dval;
+	}
+	va_end(ap);
+
+	return dest;
+}
+
 
 double *matrix_extract_seq( const MATRIX *src, double *dest, const int dest_size ) {
 	if ( src->total <= dest_size ) {
