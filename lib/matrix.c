@@ -28,8 +28,9 @@ MATRIX *matrix_new( const int row, const int column ) {
 MATRIX *matrix_identity( const int rank ) {
 	MATRIX *res = matrix_new( rank, rank );
 	int     i;
+	int     step = res->j + 1;
 
-	for ( i=0; i<rank; i++ ) res->element[i * rank + i] = 1.0;
+	for ( i=0; i<res->total; i+=step ) res->element[i] = 1.0;
 
 	return res;
 }
@@ -71,15 +72,19 @@ MATRIX *matrix_sub( const MATRIX *a, const MATRIX *b ) {
 /**/
 MATRIX *matrix_mul( const MATRIX *a, const MATRIX *b ) {
 	int     i, j, k;
+	double  tmp;
 	MATRIX *res = NULL;
 
 	if ( a->j == b->i ) {
 		res = matrix_new( a->i, b->j );
 		for ( i=0; i<a->i; i++ ) {
-			for ( j=0; j<b->j; j++ ) {
-				for ( k=0; k<a->j; k++ ) {
-					if ( fabs(a->element[i * a->j + k]) > DBL_EPSILON && fabs(b->element[k * b->j + j]) > DBL_EPSILON )
-						res->element[i * b->j + j] += a->element[i * a->j + k] * b->element[k * b->j + j];
+			for ( k=0; k<a->j; k++ ) {
+				tmp = a->element[i * a->j + k];
+				if ( fabs(tmp) > DBL_EPSILON ) {
+					for ( j=0; j<b->j; j++ ) {
+						if ( fabs(b->element[k * b->j + j]) > DBL_EPSILON )
+							res->element[i * b->j + j] += tmp * b->element[k * b->j + j];
+					}
 				}
 			}
 		}
@@ -137,7 +142,7 @@ MATRIX *matrix_inverse( const MATRIX *a ) {
 		for ( i=0; i<a->i; i++ ) {
 		/* */
 			pivot = tmp->element[i * a->j + i];
-			for ( j=i, prow=i; j<a->i; j++ ) {
+			for ( j=i+1, prow=i; j<a->i; j++ ) {
 				if ( tmp->element[j * a->j + i] > pivot ) {
 					pivot = tmp->element[j * a->j + i];
 					prow  = j;
@@ -323,10 +328,11 @@ MATRIX *matrix_apply_col( MATRIX *dest, double (*func)( const double ), int col_
 
 MATRIX *matrix_apply_diag( MATRIX *dest, double (*func)( const double ) ) {
 	int i;
+	int step = dest->j + 1;
 
 	if ( matrix_square( dest ) )
-		for ( i=0; i<dest->i; i++ )
-			dest->element[i * dest->j + i] = func(dest->element[i * dest->j + i]);
+		for ( i=0; i<dest->total; i+=step )
+			dest->element[i] = func(dest->element[i]);
 	else
 		return NULL;
 
@@ -340,7 +346,7 @@ double *matrix_prefill_array( double *dest, int data_size, ... ) {
 
 	va_start(ap, data_size);
 	for ( ; data_size>0; data_size-- ) {
-		dval    = va_arg(ap, double);
+		dval     = va_arg(ap, double);
 		*_dest++ = dval;
 	}
 	va_end(ap);
