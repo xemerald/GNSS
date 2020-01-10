@@ -5,6 +5,7 @@
 #include <math.h>
 #include <float.h>
 #include <matrix.h>
+#include <immintrin.h>
 
 
 static int matrix_same_size( const MATRIX *, const MATRIX * );
@@ -78,6 +79,35 @@ MATRIX *matrix_mul( const MATRIX *a, const MATRIX *b ) {
 	if ( a->j == b->i ) {
 		res = matrix_new( a->i, b->j );
 		for ( i=0; i<a->i; i++ ) {
+			for ( k=0; k<a->j; k++ ) {
+				tmp = a->element[i * a->j + k];
+				if ( fabs(tmp) > DBL_EPSILON ) {
+					for ( j=0; j<b->j; j++ ) {
+						if ( fabs(b->element[k * b->j + j]) > DBL_EPSILON )
+							res->element[i * b->j + j] += tmp * b->element[k * b->j + j];
+					}
+				}
+			}
+		}
+	}
+
+	return res;
+}
+
+/**/
+MATRIX *matrix_mul_simd( const MATRIX *a, const MATRIX *b ) {
+	int     i, j, k;
+	double  tmp;
+	MATRIX *res = NULL;
+	__m256d I[8], R[8], S[8], Sum[8];
+
+
+	if ( a->j == b->i ) {
+		res = matrix_new( a->i, b->j );
+		for ( i=0; i<8; i++ ) Sum[i] = _mm256_setzero_pd();
+		for ( i=0; i<a->i; i++ ) {
+			for ( k=0; k<8; k++ )
+				R[k] = _mm256_loadu_pd()
 			for ( k=0; k<a->j; k++ ) {
 				tmp = a->element[i * a->j + k];
 				if ( fabs(tmp) > DBL_EPSILON ) {
