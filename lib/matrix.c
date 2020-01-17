@@ -94,7 +94,7 @@ MATRIX *matrix_mul( const MATRIX *a, const MATRIX *b ) {
 	return res;
 }
 
-/**/
+/*
 MATRIX *matrix_mul_simd( const MATRIX *a, const MATRIX *b ) {
 	int     i, j, k;
 	double  tmp;
@@ -122,7 +122,7 @@ MATRIX *matrix_mul_simd( const MATRIX *a, const MATRIX *b ) {
 
 	return res;
 }
-
+*/
 /**/
 MATRIX *matrix_transpose( const MATRIX *a ) {
 	int     i, j;
@@ -256,7 +256,7 @@ MATRIX *matrix_div( const MATRIX *a, const MATRIX *b ) {
 
 /* Assignment functions */
 MATRIX *matrix_assign_seq( MATRIX *dest, const double *src, const int data_size ) {
-	if ( dest->total > data_size ) {
+	if ( dest->total >= data_size ) {
 		memcpy(dest->element, src, data_size * sizeof(double));
 		return dest;
 	}

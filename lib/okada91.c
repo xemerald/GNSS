@@ -1,53 +1,240 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include <float.h>
 
 #include "../include/constant.h"
+#include "../include/okada91.h"
+
+#define L_EPSILON  1e-6
 
 /**/
 static void dccon0(double, double);
-static void dccon2(double, double, double, double, double);
+static void dccon2(double *, double *, double *, double, double);
 static void ua(double, double, double, double, double, double, double *);
 static void ub(double, double, double, double, double, double, double *);
 static void uc(double, double, double, double, double, double, double, double *);
 
 /* C0 */
-static double ALP[5];
-static double SD, CD;
-static double SDSD, CDCD;
-static double SDCD, S2D, C2D;
+static volatile double ALP[5];
+static volatile double SD, CD;
+static volatile double SDSD, CDCD;
+static volatile double SDCD, S2D, C2D;
 
 /* C1 */
-static double XI2, ET2, Q2;
-static double R, R2, R3, R5;
-static double Y, D, TT;
-static double ALX, ALE;
-static double X11, Y11, X32, Y32;
-static double EY, EZ, FY, FZ, GY, GZ, HY, HZ;
+static volatile double XI2, ET2, Q2;
+static volatile double R, R2, R3, R5;
+static volatile double Y, D, TT;
+static volatile double ALX, ALE;
+static volatile double X11, Y11, X32, Y32;
+static volatile double EY, EZ, FY, FZ, GY, GZ, HY, HZ;
+
+/**/
+int disloc3d( FAULT_MODEL model, STA_COOR station, double mu, double nu,
+	double u[3], double d[9], double s[6] )
+{
+	const double deg2rad = DEG2RAD;
+	const double lambda  = 2.0 * mu * nu / (1.0 - 2.0 * nu); /* mu*nu/(0.5-nu) */
+	const double alpha   = (lambda + mu) / (lambda + 2.0 * mu);
+	const double strike  = (model.strike - 90.0) * deg2rad;
+	const double cos_s   = cos(strike);
+	const double sin_s   = sin(strike);
+	const double cos_d   = cos(model.dip * deg2rad);
+	const double sin_d   = sin(model.dip * deg2rad);
+	const double al      = model.length * 0.5;
+	const double aw      = model.width * 0.5;
+	const double depth   = model.depth - aw * sin_d;
+	const double x       = cos_s * (-model.east + station.x) - sin_s * (-model.north + station.y);
+	const double y       = -0.5 * cos_d * model.width + sin_s * (-model.east + station.x) + cos_s * (-model.north + station.y);
+
+	double uu[12] = { 0.0 };
+
+	if ( (model.depth - sin_d * model.width) < -L_EPSILON ||
+		model.length < DBL_EPSILON ||
+		model.width < DBL_EPSILON ||
+		model.depth < 0.0 )
+	{
+		fprintf(stderr, "disloc3d: Unphysical model!\n");
+		return -1;
+	}
+
+/* */
+	if ( dc3d( alpha, x, y, station.z, depth, model.dip, al, al, aw, aw, model.disl1, model.disl2, model.disl3,
+		&uu[0], &uu[1], &uu[2], &uu[3], &uu[4], &uu[5], &uu[6], &uu[7], &uu[8], &uu[9], &uu[10], &uu[11] ) );
+		//fprintf(stderr, "disloc3d: Singular result!\n");
+
+/* */
+	u[0] = cos_s * uu[0] + sin_s * uu[1];
+	u[1] = -sin_s * uu[0] + cos_s * uu[1];
+	u[2] = uu[2];
+
+	//printf("%le %le %le\n", u[0], u[1], u[2]);
+
+/**/
+	d[0] = cos_s * cos_s * uu[3] + cos_s * sin_s * (uu[4] + uu[6]) + sin_s * sin_s * uu[7];
+	d[1] = cos_s * cos_s * uu[4] - sin_s * sin_s * uu[6] + cos_s * sin_s * (-uu[3] + uu[7]);
+	d[2] = cos_s * uu[5] + sin_s * uu[8];
+	d[3] = -(sin_s * (cos_s * uu[3] + sin_s * uu[4])) + cos_s * (cos_s * uu[6] + sin_s * uu[7]);
+	d[4] = sin_s * sin_s * uu[3] - cos_s * sin_s * (uu[4] + uu[6]) + cos_s * cos_s * uu[7];
+	d[5] = -(sin_s * uu[5]) + cos_s * uu[8];
+	d[6] = cos_s * uu[9] + sin_s * uu[10];
+	d[7] = -(sin_s * uu[9]) + cos_s * uu[10];
+	d[8] = uu[11];
+
+/**/
+	double theta = lambda * (d[0] + d[4] + d[8]);
+
+	s[0] = theta + 2.0 * mu * d[0];
+	s[1] = mu * (d[1] + d[3]);
+	s[2] = mu * (d[2] + d[6]);
+	s[3] = theta + 2.0 * mu * d[4];
+	s[4] = mu * (d[5] + d[7]);
+	s[5] = theta + 2.0 * mu * d[8];
+
+	return 0;
+}
 
 
 /**/
-int dc3d(double alpha, double x, double y, double z, double depth, double dip,
-	double al1, double al2, double aw1, double aw2, double disl1, double disl2, double disl3,
-	double ux, double uy, double uz, double uxx, double uyx, double uzx,
-	double uxy,	double uyy, double uzy, double uxz, double uyz, double uzz)
+int dc3d(double _alpha, double _x, double _y, double _z, double _depth, double _dip,
+	double _al1, double _al2, double _aw1, double _aw2, double _disl1, double _disl2, double _disl3,
+	double *_ux, double *_uy, double *_uz, double *_uxx, double *_uyx, double *_uzx,
+	double *_uxy, double *_uyy, double *_uzy, double *_uxz, double *_uyz, double *_uzz)
 {
-	int i;
-	double u[12], du[12];
-	double dua[12], dub[12], duc[12];
+	int i, j, k, ii;
+	int flag1 = 0, flag2 = 0;
 
-	if ( z > 0.0 ) fprintf(stderr, "dc3d: Positive Z was given!\n");
+	double _d, _p, _q;
+	double _et, _xi;
+	double _u[12] = { 0.0 };
+	double _du[12] = { 0.0 };
+	double _dua[12] = { 0.0 };
+	double _dub[12] = { 0.0 };
+	double _duc[12] = { 0.0 };
 
-	i = 12 * sizeof(double);
-	memset(u,   0, i);
-	memset(du,  0, i);
-	memset(dua, 0, i);
-	memset(dub, 0, i);
-	memset(duc, 0, i);
+/**/
+	if ( _z > 0.0 ) fprintf(stderr, "dc3d: Positive Z was given!\n");
+/**/
+	dccon0( _alpha, _dip );
 
-	dccon0(alpha, dip);
+/**/
+	_d = _depth + _z;
+	_p = _y * CD + _d * SD;
+	_q = _y * SD - _d * CD;
 
+	if ( (_x + _al1)*(_x - _al2) <= 0.0 ) flag1 = 1;
+	if ( (_p + _aw1)*(_p - _aw2) <= 0.0 ) flag2 = 1;
+
+/**/
+	for ( k = 0; k < 2; k++ ) {
+		if ( k == 0 ) _et = _p + _aw1;
+		else _et = _p - _aw2;
+	/**/
+		for ( j = 0; j < 2; j++ ) {
+			if ( j == 0 ) _xi = _x + _al1;
+			else _xi = _x - _al2;
+		/**/
+			dccon2( &_xi, &_et, &_q, SD, CD );
+		/**/
+			if ( (flag1 && fabs(_q) < DBL_EPSILON && fabs(_et) < DBL_EPSILON) ||
+				(flag2 && fabs(_q) < DBL_EPSILON && fabs(_xi) < DBL_EPSILON) )
+				goto except;
+		/**/
+			ua( _xi, _et, _q, _disl1, _disl2, _disl3, _dua );
+		/**/
+			ii = 0;
+			for ( i = 0; i < 4; i++ ) {
+				_du[ii] = -_dua[ii];
+				ii++;
+				_du[ii] = -_dua[ii]*CD + _dua[ii+1]*SD;
+				ii++;
+				_du[ii] = -_dua[ii-1]*SD - _dua[ii]*CD;
+				ii++;
+			}
+		/**/
+			_du[ 9] = -_du[9];
+			_du[10] = -_du[10];
+			_du[11] = -_du[11];
+		/**/
+			for ( i = 0; i < 12; i++ ) {
+				if ( j + k != 1 )
+					_u[i] += _du[i];
+				if ( j + k == 1 )
+					_u[i] -= _du[i];
+			}
+		}
+	}
+
+/**/
+	_d = _depth - _z;
+	_p = _y * CD + _d * SD;
+	_q = _y * SD - _d * CD;
+/**/
+	for ( k = 0; k < 2; k++ ) {
+		if ( k == 0 ) _et = _p + _aw1;
+		else _et = _p - _aw2;
+	/**/
+		for ( j = 0; j < 2; j++ ) {
+			if ( j == 0 ) _xi = _x + _al1;
+			else _xi = _x - _al2;
+		/**/
+			dccon2( &_xi, &_et, &_q, SD, CD );
+		/**/
+			ua( _xi, _et, _q, _disl1, _disl2, _disl3, _dua );
+			ub( _xi, _et, _q, _disl1, _disl2, _disl3, _dub );
+			uc( _xi, _et, _q, _z, _disl1, _disl2, _disl3, _duc );
+		/**/
+			ii = 0;
+			for ( i = 0; i < 4; i++ ) {
+				_du[ii] = _dua[ii] + _dub[ii] + _z*_duc[ii];
+				ii++;
+				_du[ii] = (_dua[ii] + _dub[ii] + _z*_duc[ii])*CD - (_dua[ii+1] + _dub[ii+1] + _z*_duc[ii+1])*SD;
+				ii++;
+				_du[ii] = (_dua[ii-1] + _dub[ii-1] - _z*_duc[ii-1])*SD + (_dua[ii] + _dub[ii] - _z*_duc[ii])*CD;
+				ii++;
+			}
+		/**/
+			_du[ 9] += _duc[0];
+			_du[10] += _duc[1]*CD - _duc[2]*SD;
+			_du[11] -= _duc[1]*SD + _duc[2]*CD;
+		/**/
+			for ( i = 0; i < 12; i++ ) {
+				if ( j + k != 1 )
+					_u[i] += _du[i];
+				if ( j + k == 1 )
+					_u[i] -= _du[i];
+			}
+		}
+	}
+
+	*_ux = _u[0];
+	*_uy = _u[1];
+	*_uz = _u[2];
+	*_uxx = _u[3];
+	*_uyx = _u[4];
+	*_uzx = _u[5];
+	*_uxy = _u[6];
+	*_uyy = _u[7];
+	*_uzy = _u[8];
+	*_uxz = _u[9];
+	*_uyz = _u[10];
+	*_uzz = _u[11];
 	return 0;
+
+except:
+	*_ux = 0.0;
+	*_uy = 0.0;
+	*_uz = 0.0;
+	*_uxx = 0.0;
+	*_uyx = 0.0;
+	*_uzx = 0.0;
+	*_uxy = 0.0;
+	*_uyy = 0.0;
+	*_uzy = 0.0;
+	*_uxz = 0.0;
+	*_uyz = 0.0;
+	*_uzz = 0.0;
+	return 1;
 }
 
 
@@ -231,7 +418,7 @@ static void ub(double _xi, double _et, double _q, double _disl1, double _disl2, 
 		_du[10] = -_et * GZ - _xy * CD - tmp * _xi * _d11;
 		_du[11] = _q * GZ              - tmp * _ak4;
 	/**/
-		tmp = _disl2 / _pi2
+		tmp = _disl2 / _pi2;
 		for ( i = 0; i < 12; i++ ) _u[i] += tmp * _du[i];
 	}
 
@@ -250,7 +437,7 @@ static void ub(double _xi, double _et, double _q, double _disl1, double _disl2, 
 		_du[7]  = _q * GY  - tmp * _aj2;
 		_du[8]  = -_q * HY - tmp * _aj3;
 		_du[9]  = _q*FZ    + tmp * _ak3;
-		_du[10] = _q*GZ;   + tmp * _xi * _d11;
+		_du[10] = _q*GZ    + tmp * _xi * _d11;
 		_du[11] = -_q*HZ   + tmp * _ak4;
 	/**/
 		tmp = _disl3 / _pi2;
@@ -270,7 +457,7 @@ static void uc(double _xi, double _et, double _q, double _z, double _disl1, doub
 
 	const double _pi2 = PI * 2.0;
 	const double _xy = _xi * Y11;
-	const double _qx =  _q * X11;
+	//const double _qx =  _q * X11;
 	const double _qy =  _q * Y11;
 
 	const double _c   = D + _z;
@@ -287,7 +474,7 @@ static void uc(double _xi, double _et, double _q, double _z, double _disl1, doub
 	const double _qqy = 3.0 * _c * D / R5 - _qq * SD;
 	const double _qqz = 3.0 * _c * Y / R5 - _qq * CD + _q * Y32;
 	const double _qr  = 3.0 * _q / R5;
-	const double _cqx = _c * _q * _x53;
+	//const double _cqx = _c * _q * _x53;
 	const double _cdr = (_c + D) / R3;
 	const double _yy0 = Y / R3 - _y0 * CD;
 
@@ -362,19 +549,19 @@ static void uc(double _xi, double _et, double _q, double _z, double _disl1, doub
 }
 
 /**/
-static void dccon0(double alpha, double dip)
+static void dccon0(double _alpha, double _dip)
 {
-	ALP[0] = (1.0 - alpha) * 0.5;
-	ALP[1] = alpha * 0.5;
-	ALP[2] = (1.0 - alpha) / alpha;
-	ALP[3] = 1.0 - alpha;
-	ALP[4] = alpha;
+	ALP[0] = (1.0 - _alpha) * 0.5;
+	ALP[1] = _alpha * 0.5;
+	ALP[2] = (1.0 - _alpha) / _alpha;
+	ALP[3] = 1.0 - _alpha;
+	ALP[4] = _alpha;
 
-	dip = dip * (PI / 180.0);
-	SD = sin(dip);
-	CD = cos(dip);
+	_dip *= DEG2RAD;
+	SD = sin(_dip);
+	CD = cos(_dip);
 
-	if ( fabs(CD) < DBL_EPSILON ) {
+	if ( fabs(CD) < L_EPSILON ) {
 		CD = 0.0;
 		if ( SD > 0.0 ) SD = 1.0;
 		else SD = -1.0;
@@ -386,66 +573,73 @@ static void dccon0(double alpha, double dip)
 	S2D  = SDCD * 2.0;
 	C2D  = CDCD - SDSD;
 
+	//printf("%lf %lf %lf\n", _alpha, SD, CD);
 	return;
 }
 
 /**/
-static void dccon2(double xi, double et, double q, double sd, double cd)
+static void dccon2(double *__xi, double *__et, double *__q, double _sd, double _cd)
 {
 	double tmp;
 
-	xi = xi < DBL_EPSILON ? 0.0 : xi;
-	et = et < DBL_EPSILON ? 0.0 : et;
-	q  = q  < DBL_EPSILON ? 0.0 : q;
+	*__xi = fabs(*__xi) < L_EPSILON ? 0.0 : *__xi;
+	*__et = fabs(*__et) < L_EPSILON ? 0.0 : *__et;
+	*__q  = fabs(*__q)  < L_EPSILON ? 0.0 : *__q;
 
-	XI2 = xi * xi;
-	ET2 = et * et;
-	Q2  = q * q;
+	double _xi = *__xi;
+	double _et = *__et;
+	double _q = *__q;
+
+	//printf("%lf %lf %lf\n", _xi, _et, _q);
+
+	XI2 = _xi * _xi;
+	ET2 = _et * _et;
+	Q2  = _q * _q;
 	R2  = XI2 + ET2 + Q2;
 	R   = sqrt(R2);
 	if ( R < DBL_EPSILON ) return;
 	R3  = R * R2;
 	R5  = R3 * R2;
-	Y   = et * cd + q * sd;
-	D   = er * sd - q * cd;
+	Y   = _et * _cd + _q * _sd;
+	D   = _et * _sd - _q * _cd;
 
-	if ( fabs(q) < DBL_EPSILON )
+	if ( fabs(_q) < DBL_EPSILON )
 		TT = 0.0;
 	else
-		TT = atan(xi*et / (q*R));
+		TT = atan(_xi * _et / (_q * R));
 
-	if ( xi < 0.0 && fabs(q) < DBL_EPSILON && fabs(et) < DBL_EPSILON ) {
-		ALX = -log(R - xi);
+	if ( _xi < 0.0 && fabs(_q) < DBL_EPSILON && fabs(_et) < DBL_EPSILON ) {
+		ALX = -log(R - _xi);
 		X11 = 0.0;
 		X32 = 0.0;
 	}
 	else {
-		tmp = R + xi;
+		tmp = R + _xi;
 		ALX = log(tmp);
 		X11 = 1.0 / (R * tmp);
-		X32 = (R + tmp)*X11*X11 / R;
+		X32 = (R + tmp) * X11 * X11 / R;
 	}
 
-	if ( et < 0.0 && fabs(q) < DBL_EPSILON && fabs(xi) < DBL_EPSILON ) {
-		ALE = -log(R - et);
+	if ( _et < 0.0 && fabs(_q) < DBL_EPSILON && fabs(_xi) < DBL_EPSILON ) {
+		ALE = -log(R - _et);
 		Y11 = 0.0;
 		Y32 = 0.0;
 	}
 	else {
-		tmp = R + et;
+		tmp = R + _et;
 		ALE = log(tmp);
 		Y11 = 1.0 / (R * tmp);
-		Y32 = (R + tmp)*Y11*Y11 / R;
+		Y32 = (R + tmp) * Y11 * Y11 / R;
 	}
 
-	EY = sd / R - Y * q / R3;
-	EZ = cd / R + D * q / R3;
-	FY = D / R3 + XI2 * Y32 * sd;
-	FZ = Y / R3 + XI2 * Y32 * cd;
-	GY = 2.0 * X11 * sd - Y * q * X32;
-	GZ = 2.0 * X11 * cd - D * q * X32;
-	HY = D * q * X32 + xi * q * Y32 * sd;
-	HZ = Y * q * X32 + xi * q * Y32 * cd;
+	EY = _sd / R - Y * _q / R3;
+	EZ = _cd / R + D * _q / R3;
+	FY = D / R3 + XI2 * Y32 * _sd;
+	FZ = Y / R3 + XI2 * Y32 * _cd;
+	GY = 2.0 * X11 * _sd - Y * _q * X32;
+	GZ = 2.0 * X11 * _cd + D * _q * X32;
+	HY = D * _q * X32 + _xi * _q * Y32 * _sd;
+	HZ = Y * _q * X32 + _xi * _q * Y32 * _cd;
 
 	return;
 }
