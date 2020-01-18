@@ -2,11 +2,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <math.h>
 #include <float.h>
-#include <matrix.h>
 #include <immintrin.h>
 
+#include "../include/matrix.h"
+#include "../include/nnls.h"
 
 static int matrix_same_size( const MATRIX *, const MATRIX * );
 static int matrix_square( const MATRIX * );
@@ -250,6 +252,40 @@ MATRIX *matrix_div( const MATRIX *a, const MATRIX *b ) {
 	matrix_free( gtg );
 	matrix_free( igtg );
 	matrix_free( igtggt );
+
+	return res;
+}
+
+/**/
+MATRIX *matrix_nnls( const MATRIX *a, const MATRIX *b ) {
+	int m     = b->i;
+	int n     = b->j;
+	int mda   = m;
+	int ret   = 0;
+	int *_ind = malloc(sizeof(int)*n + 1);
+
+	double rnorm = 0.0;
+	double *_a   = malloc(sizeof(double)*m*n);
+	double *_b   = malloc(sizeof(double)*m);
+	double *_x   = malloc(sizeof(double)*n);
+	double *_w   = malloc(sizeof(double)*n);
+	double *_zz  = malloc(sizeof(double)*m);
+
+	MATRIX *res = matrix_new( n, 1 );
+
+	matrix_extract_seq( b, _a, m*n );
+	matrix_extract_seq( a, _b, m );
+
+	nnls_c( _a, &mda, &m, &n, _b, _x, &rnorm, _w, _zz, _ind, &ret );
+
+	matrix_assign_seq( res, _x, n );
+
+	free(_ind);
+	free(_a);
+	free(_b);
+	free(_x);
+	free(_w);
+	free(_zz);
 
 	return res;
 }

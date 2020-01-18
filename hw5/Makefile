@@ -10,12 +10,15 @@ FCOMPL = gfortran
 
 L = ../lib
 
-LLIBS = $L/okada91.o $L/matrix.o $L/faultgeom.o
+LLIBS = $L/okada91.o $L/matrix.o $L/faultgeom.o $L/xyz2geoc.o $L/nnls.o
 
-all: hw5_1
+all: hw5_1 hw5_2
 
 hw5_1: hw5_1.o $(LIBS) $(LLIBS)
 	$(CC) $(CFLAGS) -o hw5_1 hw5_1.o $(LLIBS) $(LIBS)
+
+hw5_1: hw5_2.o $(LIBS) $(LLIBS)
+	$(CC) $(CFLAGS) -o hw5_2 hw5_2.o $(LLIBS) $(LIBS)
 
 # Clean-up rules
 clean:

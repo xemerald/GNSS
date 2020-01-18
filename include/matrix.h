@@ -17,6 +17,8 @@ MATRIX *matrix_div( const MATRIX *, const MATRIX * );
 MATRIX *matrix_transpose( const MATRIX * );
 MATRIX *matrix_inverse( const MATRIX * );
 
+MATRIX *matrix_nnls( const MATRIX *, const MATRIX * );
+
 MATRIX *matrix_assign_seq( MATRIX *, const double *, const int );
 MATRIX *matrix_assign_row( MATRIX *, const double *, int, const int );
 MATRIX *matrix_assign_col( MATRIX *, const double *, int, const int );
