@@ -1,2 +1,2 @@
 # Ignore the object files.
-#*.o
+*.o
