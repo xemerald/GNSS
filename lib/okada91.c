@@ -30,17 +30,22 @@ static volatile double X11, Y11, X32, Y32;
 static volatile double EY, EZ, FY, FZ, GY, GZ, HY, HZ;
 
 /**/
-int disloc3d( FAULT_MODEL model, STA_COOR station, double mu, double nu,
-	double u[3], double d[9], double s[6] )
-{
-	const double deg2rad = DEG2RAD;
-	const double lambda  = 2.0 * mu * nu / (1.0 - 2.0 * nu); /* mu*nu/(0.5-nu) */
+int disloc3d (
+	FAULT_MODEL model,
+	STA_COOR station,
+	double mu,
+	double nu,
+	double u[3],
+	double d[9],
+	double s[6]
+) {
+	const double lambda  = mu * nu / (0.5 - nu); /* Origin: 2.0*mu*nu/(1.0-2.0*nu) */
 	const double alpha   = (lambda + mu) / (lambda + 2.0 * mu);
-	const double strike  = (model.strike - 90.0) * deg2rad;
+	const double strike  = (model.strike - 90.0) * DEG2RAD;
 	const double cos_s   = cos(strike);
 	const double sin_s   = sin(strike);
-	const double cos_d   = cos(model.dip * deg2rad);
-	const double sin_d   = sin(model.dip * deg2rad);
+	const double cos_d   = cos(model.dip * DEG2RAD);
+	const double sin_d   = sin(model.dip * DEG2RAD);
 	const double al      = model.length * 0.5;
 	const double aw      = model.width * 0.5;
 	const double depth   = model.depth - aw * sin_d;
@@ -96,11 +101,17 @@ int disloc3d( FAULT_MODEL model, STA_COOR station, double mu, double nu,
 
 
 /**/
-int dc3d(double _alpha, double _x, double _y, double _z, double _depth, double _dip,
-	double _al1, double _al2, double _aw1, double _aw2, double _disl1, double _disl2, double _disl3,
-	double *_ux, double *_uy, double *_uz, double *_uxx, double *_uyx, double *_uzx,
-	double *_uxy, double *_uyy, double *_uzy, double *_uxz, double *_uyz, double *_uzz)
-{
+int dc3d (
+	const double _alpha,
+	double _x, double _y, double _z,
+	double _depth, double _dip, double _al1, double _al2, double _aw1, double _aw2,
+	double _disl1, double _disl2, double _disl3,
+	double u[12]
+/*
+	*_ux, *_uy, *_uz, *_uxx, *_uyx, *_uzx,
+	*_uxy, *_uyy, *_uzy, *_uxz, *_uyz, *_uzz
+*/
+) {
 	int i, j, k, ii;
 	int flag1 = 0, flag2 = 0;
 
@@ -138,7 +149,7 @@ int dc3d(double _alpha, double _x, double _y, double _z, double _depth, double _
 		/**/
 			if ( (flag1 && fabs(_q) < DBL_EPSILON && fabs(_et) < DBL_EPSILON) ||
 				(flag2 && fabs(_q) < DBL_EPSILON && fabs(_xi) < DBL_EPSILON) )
-				goto except;
+				goto singular;
 		/**/
 			ua( _xi, _et, _q, _disl1, _disl2, _disl3, _dua );
 		/**/
@@ -207,121 +218,116 @@ int dc3d(double _alpha, double _x, double _y, double _z, double _depth, double _
 		}
 	}
 
-	*_ux = _u[0];
-	*_uy = _u[1];
-	*_uz = _u[2];
-	*_uxx = _u[3];
-	*_uyx = _u[4];
-	*_uzx = _u[5];
-	*_uxy = _u[6];
-	*_uyy = _u[7];
-	*_uzy = _u[8];
-	*_uxz = _u[9];
-	*_uyz = _u[10];
-	*_uzz = _u[11];
+	memcpy(u, _u, sizeof(double)*12);
 	return 0;
 
-except:
-	*_ux = 0.0;
-	*_uy = 0.0;
-	*_uz = 0.0;
-	*_uxx = 0.0;
-	*_uyx = 0.0;
-	*_uzx = 0.0;
-	*_uxy = 0.0;
-	*_uyy = 0.0;
-	*_uzy = 0.0;
-	*_uxz = 0.0;
-	*_uyz = 0.0;
-	*_uzz = 0.0;
+singular:
+	memset(u, 0, sizeof(double)*12);
 	return 1;
 }
 
 
 /**/
-static void ua(double _xi, double _et, double _q, double _disl1, double _disl2, double _disl3, double *_u)
+static void ua( double xi, double et, double q, double disl1, double disl2, double disl3, double u[12] )
 {
 	int i;
 
-	double tmp;
-	double _du[12];
+	double tmp1, tmp2, tmp3;
+	double du[12];
 
-	const double _pi2 = PI * 2.0;
-	const double _xy = _xi * Y11;
-	const double _qx =  _q * X11;
-	const double _qy =  _q * Y11;
+	const double xy = xi * Y11;
+	const double qx =  q * X11;
+	const double qy =  q * Y11;
+	const double half_tt = TT * 0.5;
 
-	for ( i = 0; i < 12; i++ ) _u[i] = 0.0;
+	memset(u, 0, sizeof(double)*12);
 
 /**/
-	if ( fabs(_disl1) > DBL_EPSILON ) {
+	if ( fabs(disl1) > DBL_EPSILON ) {
 	/**/
-		_du[0]  =  TT / 2.0     + ALP[1] * _xi * _qy;
-		_du[1]  =                 ALP[1] * _q / R;
-		_du[2]  =  ALP[0] * ALE - ALP[1] * _q * _qy;
-		_du[3]  = -ALP[0] * _qy - ALP[1] * XI2 * _q * Y32;
-		_du[4]  =               - ALP[1] * _xi * _q / R3;
-		_du[5]  =  ALP[0] * _xy + ALP[1] * _xi * Q2 * Y32;
+		tmp1  = ALP[1] * q;
+		du[0] = half_tt      + tmp1 * xi * Y11;
+		du[1] =                tmp1 / R;
+		du[2] = ALP[0] * ALE - tmp1 * qy;
 	/**/
-		_du[6]  =  ALP[0] * _xy * SD            + ALP[1] * _xi * FY + D / 2.0 * X11;
-		_du[7]  =                                 ALP[1] * EY;
-		_du[8]  =  ALP[0] * (CD / R + _qy * SD) - ALP[1] * _q * FY;
-		_du[9]  =  ALP[0] * _xy * CD            + ALP[1] * _xi * FZ + Y / 2.0 * X11;
-		_du[10] =                                 ALP[1] * EZ;
-		_du[11] = -ALP[0] * (SD / R - _qy * CD) - ALP[1] * _q * FZ;
+		tmp2  = tmp1 * xi;
+		du[3] = -ALP[0] * qy - tmp2 * xi * Y32;
+		du[4] =              - tmp2 / R3;
+		du[5] = ALP[0] * xy  + tmp2 * q * Y32;
 	/**/
-		tmp = _disl1 / _pi2;
-		for( i = 0; i < 12; i++ ) _u[i] += tmp * _du[i];
+		tmp2   = X11 * 0.5;
+		tmp3   = ALP[1] * xi;
+		du[6]  = ALP[0] * xy * SD            + tmp3 * FY + D * tmp2;
+		du[7]  =                               ALP[1] * EY;
+		du[8]  = ALP[0] * (CD / R + qy * SD) - tmp1 * FY;
+	/**/
+		du[9]  = ALP[0] * xy * CD             + tmp3 * FZ + Y * tmp2;
+		du[10] =                                ALP[1] * EZ;
+		du[11] = -ALP[0] * (SD / R - qy * CD) - tmp1 * FZ;
+	/**/
+		tmp1 = disl1 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 /**/
-	if ( fabs(_disl2) > DBL_EPSILON ) {
+	if ( fabs(disl2) > DBL_EPSILON ) {
 	/**/
-		_du[0]  =                 ALP[1] * _q / R;
-		_du[1]  =  TT / 2.0     + ALP[1] * _et * _qx;
-		_du[2]  =  ALP[0] * ALX - ALP[1] * _q * _qx;
-		_du[3]  =               - ALP[1] * _xi * _q / R3;
-		_du[4]  = -_qy / 2.0    - ALP[1] * _et * _q / R3;
-		_du[5]  =  ALP[0] / R   + ALP[1] * Q2 / R3;
+		tmp1  = ALP[1] * q;
+		du[0] =                tmp1 / R;
+		du[1] = half_tt      + tmp1 * et * X11;
+		du[2] = ALP[0] * ALX - tmp1 * qx;
 	/**/
-		_du[6]  =                                      ALP[1] * EY;
-		_du[7]  =  ALP[0] * D * X11 + _xy / 2.0 * SD + ALP[1] * _et * GY;
-		_du[8]  =  ALP[0] * Y * X11                  - ALP[1] * _q * GY;
-		_du[9]  =                                      ALP[1] * EZ;
-		_du[10] =  ALP[0] * Y * X11 + _xy / 2.0 * CD + ALP[1] * _et * GZ;
-		_du[11] = -ALP[0] * D * X11                  - ALP[1] * _q * GZ;
+		tmp2  = tmp1 / R3;
+		du[3] =            - tmp2 * xi;
+		du[4] = -qy * 0.5  - tmp2 * et;
+		du[5] = ALP[0] / R + tmp2 * q;
 	/**/
-		tmp = _disl2 / _pi2;
-		for( i = 0; i < 12; i++ ) _u[i] += tmp * _du[i];
+		tmp2  = ALP[0] * D * X11;
+		tmp3  = ALP[0] * Y * X11;
+		du[6] =                        ALP[1] * EY;
+		du[7] = tmp2 + xy * 0.5 * SD + ALP[1] * et * GY;
+		du[8] = tmp3                 - tmp1 * GY;
+	/**/
+		du[9]  =                        ALP[1] * EZ;
+		du[10] = tmp3 + xy * 0.5 * CD + ALP[1] * et * GZ;
+		du[11] = -tmp2                - tmp1 * GZ;
+	/**/
+		tmp1 = disl2 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 /**/
-	if ( fabs(_disl3) > DBL_EPSILON ) {
-		tmp = ALP[1] * _q;
+	if ( fabs(disl3) > DBL_EPSILON ) {
 	/**/
-		_du[0]  = -ALP[0] * ALE - tmp * _qy;
-		_du[1]  = -ALP[0] * ALX - tmp * _qx;
-		_du[2]  =  TT / 2.0     + ALP[1] * (_et * _qx + _xi * _qy);
-		_du[3]  = -ALP[0] * _xy + ALP[1] * _xi * Q2 * Y32;
-		_du[4]  = -ALP[0] / R   + ALP[1] * Q2 / R3;
-		_du[5]  = -ALP[0] * _qy - tmp * Q2 * Y32;
+		tmp1  = ALP[1] * q;
+		du[0] = -ALP[0] * ALE - tmp1 * qy;
+		du[1] = -ALP[0] * ALX - tmp1 * qx;
+		du[2] = half_tt       + tmp1 * (et * X11 + xi * Y11);
 	/**/
-		_du[6]  = -ALP[0] * (CD / R + _qy * SD)  - tmp * FY;
-		_du[7]  = -ALP[0] * Y * X11              - tmp * GY;
-		_du[8]  =  ALP[0] * (D * X11 + _xy * SD) + tmp * HY;
-		_du[9]  =  ALP[0] * (SD / R - _qy * CD)  - tmp * FZ;
-		_du[10] =  ALP[0] * D * X11              - tmp * GZ;
-		_du[11] =  ALP[0] * (Y * X11 + _xy * CD) + tmp * HZ;
+		tmp2  = tmp1 * q;
+		du[3] = -ALP[0] * xy + tmp2 * xi * Y32;
+		du[4] = -ALP[0] / R  + tmp2 / R3;
+		du[5] = -ALP[0] * qy - tmp2 * q * Y32;
 	/**/
-		tmp = _disl3 / _pi2;
-		for( i = 0; i < 12; i++ ) _u[i] += tmp * _du[i];
+		tmp2  = ALP[0] * Y * X11;
+		tmp3  = ALP[0] * D * X11;
+		du[6]  = -ALP[0] * (CD / R + qy * SD) - tmp1 * FY;
+		du[7]  = -tmp2                        - tmp1 * GY;
+		du[8]  = tmp3 + ALP[0] * xy * SD      + tmp1 * HY;
+	/**/
+		du[9]  = ALP[0] * (SD / R - qy * CD) - tmp1 * FZ;
+		du[10] = tmp3                        - tmp1 * GZ;
+		du[11] = tmp2 + ALP[0] * xy * CD     + tmp1 * HZ;
+	/**/
+		tmp1 = disl3 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 	return;
 }
 
 /**/
-static void ub(double _xi, double _et, double _q, double _disl1, double _disl2, double _disl3, double *_u)
+static void ub(double xi, double et, double q, double disl1, double _disl2, double _disl3, double *_u)
 {
 	int i;
 
@@ -330,7 +336,7 @@ static void ub(double _xi, double _et, double _q, double _disl1, double _disl2, 
 
 	const double _pi2 = PI * 2.0;
 	const double _xy  = _xi * Y11;
-	const double _qx  =  _q * X11;
+	const double qx  =  q * X11;
 	const double _qy  =  _q * Y11;
 
 	const double _rd  = R + D;
@@ -436,9 +442,9 @@ static void ub(double _xi, double _et, double _q, double _disl1, double _disl2, 
 		_du[6]  = _q * FY  - tmp * _aj1;
 		_du[7]  = _q * GY  - tmp * _aj2;
 		_du[8]  = -_q * HY - tmp * _aj3;
-		_du[9]  = _q*FZ    + tmp * _ak3;
-		_du[10] = _q*GZ    + tmp * _xi * _d11;
-		_du[11] = -_q*HZ   + tmp * _ak4;
+		_du[9]  = _q * FZ  + tmp * _ak3;
+		_du[10] = _q * GZ  + tmp * _xi * _d11;
+		_du[11] = -_q * HZ + tmp * _ak4;
 	/**/
 		tmp = _disl3 / _pi2;
 		for ( i = 0; i < 12; i++ ) _u[i] += tmp * _du[i];
@@ -549,22 +555,21 @@ static void uc(double _xi, double _et, double _q, double _z, double _disl1, doub
 }
 
 /**/
-static void dccon0(double _alpha, double _dip)
+static void dccon0 ( double alpha, double dip )
 {
-	ALP[0] = (1.0 - _alpha) * 0.5;
-	ALP[1] = _alpha * 0.5;
-	ALP[2] = (1.0 - _alpha) / _alpha;
-	ALP[3] = 1.0 - _alpha;
-	ALP[4] = _alpha;
+	ALP[1] = alpha * 0.5;
+	ALP[0] = 0.5 - ALP[1];   /* (1.0 - _alpha) * 0.5 */
+	ALP[3] = 1.0 - alpha;
+	ALP[2] = ALP[3] / alpha; /* (1.0 - _alpha) / _alpha */
+	ALP[4] = alpha;
 
-	_dip *= DEG2RAD;
-	SD = sin(_dip);
-	CD = cos(_dip);
+	dip *= DEG2RAD;
+	SD = sin(dip);
+	CD = cos(dip);
 
 	if ( fabs(CD) < L_EPSILON ) {
 		CD = 0.0;
-		if ( SD > 0.0 ) SD = 1.0;
-		else SD = -1.0;
+		SD = SD > 0.0 ? 1.0 : -1.0;
 	}
 
 	SDSD = SD * SD;
@@ -573,73 +578,70 @@ static void dccon0(double _alpha, double _dip)
 	S2D  = SDCD * 2.0;
 	C2D  = CDCD - SDSD;
 
-	//printf("%lf %lf %lf\n", _alpha, SD, CD);
 	return;
 }
 
 /**/
-static void dccon2(double *__xi, double *__et, double *__q, double _sd, double _cd)
+static void dccon2 ( double *xi, double *et, double *q, double sd, double cd )
 {
-	double tmp;
+	double tmp1, tmp2, tmp3;
 
-	*__xi = fabs(*__xi) < L_EPSILON ? 0.0 : *__xi;
-	*__et = fabs(*__et) < L_EPSILON ? 0.0 : *__et;
-	*__q  = fabs(*__q)  < L_EPSILON ? 0.0 : *__q;
+	*xi = fabs(*xi) < L_EPSILON ? 0.0 : *xi;
+	*et = fabs(*et) < L_EPSILON ? 0.0 : *et;
+	*q  = fabs(*q)  < L_EPSILON ? 0.0 : *q;
 
-	double _xi = *__xi;
-	double _et = *__et;
-	double _q = *__q;
-
-	//printf("%lf %lf %lf\n", _xi, _et, _q);
-
-	XI2 = _xi * _xi;
-	ET2 = _et * _et;
-	Q2  = _q * _q;
+	XI2 = *xi * *xi;
+	ET2 = *et * *et;
+	Q2  = *q * *q;
 	R2  = XI2 + ET2 + Q2;
 	R   = sqrt(R2);
 	if ( R < DBL_EPSILON ) return;
 	R3  = R * R2;
 	R5  = R3 * R2;
-	Y   = _et * _cd + _q * _sd;
-	D   = _et * _sd - _q * _cd;
+	Y   = *et * cd + *q * sd;
+	D   = *et * sd - *q * cd;
+	TT  = fabs(*q) < DBL_EPSILON ? 0.0 : atan(*xi * *et / (*q * R));
 
-	if ( fabs(_q) < DBL_EPSILON )
-		TT = 0.0;
-	else
-		TT = atan(_xi * _et / (_q * R));
-
-	if ( _xi < 0.0 && fabs(_q) < DBL_EPSILON && fabs(_et) < DBL_EPSILON ) {
-		ALX = -log(R - _xi);
+	if ( *xi < 0.0 && fabs(*q) < DBL_EPSILON && fabs(*et) < DBL_EPSILON ) {
+		ALX = -log(R - *xi);
 		X11 = 0.0;
 		X32 = 0.0;
 	}
 	else {
-		tmp = R + _xi;
-		ALX = log(tmp);
-		X11 = 1.0 / (R * tmp);
-		X32 = (R + tmp) * X11 * X11 / R;
+		tmp1 = R + *xi;
+		ALX = log(tmp1);
+		X11 = 1.0 / (R * tmp1);
+		X32 = (R + tmp1) * X11 * X11 / R;
 	}
 
-	if ( _et < 0.0 && fabs(_q) < DBL_EPSILON && fabs(_xi) < DBL_EPSILON ) {
-		ALE = -log(R - _et);
+	if ( *et < 0.0 && fabs(*q) < DBL_EPSILON && fabs(*xi) < DBL_EPSILON ) {
+		ALE = -log(R - *et);
 		Y11 = 0.0;
 		Y32 = 0.0;
 	}
 	else {
-		tmp = R + _et;
-		ALE = log(tmp);
-		Y11 = 1.0 / (R * tmp);
-		Y32 = (R + tmp) * Y11 * Y11 / R;
+		tmp1 = R + *et;
+		ALE = log(tmp1);
+		Y11 = 1.0 / (R * tmp1);
+		Y32 = (R + tmp1) * Y11 * Y11 / R;
 	}
 
-	EY = _sd / R - Y * _q / R3;
-	EZ = _cd / R + D * _q / R3;
-	FY = D / R3 + XI2 * Y32 * _sd;
-	FZ = Y / R3 + XI2 * Y32 * _cd;
-	GY = 2.0 * X11 * _sd - Y * _q * X32;
-	GZ = 2.0 * X11 * _cd + D * _q * X32;
-	HY = D * _q * X32 + _xi * _q * Y32 * _sd;
-	HZ = Y * _q * X32 + _xi * _q * Y32 * _cd;
+	tmp1 = Y / R3;
+	tmp2 = D / R3;
+	EY = sd / R - *q * tmp1;
+	EZ = cd / R + *q * tmp2;
+	tmp3 = XI2 * Y32;
+	FY = tmp2 + tmp3 * sd;
+	FZ = tmp1 + tmp3 * cd;
+
+	tmp1 = X11 * 2.0;
+	tmp2 = Y * *q * X32;
+	tmp3 = D * *q * X32;
+	GY = tmp1 * sd - tmp2;
+	GZ = tmp1 * cd + tmp3;
+	tmp1 = *xi * *q * Y32;
+	HZ = tmp2 + tmp1 * cd;
+	HY = tmp3 + tmp1 * sd;
 
 	return;
 }
