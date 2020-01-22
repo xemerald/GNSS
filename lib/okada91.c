@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <float.h>
 
@@ -9,11 +10,11 @@
 #define L_EPSILON  1e-6
 
 /**/
-static void dccon0(double, double);
-static void dccon2(double *, double *, double *, double, double);
-static void ua(double, double, double, double, double, double, double *);
-static void ub(double, double, double, double, double, double, double *);
-static void uc(double, double, double, double, double, double, double, double *);
+static void dccon0 ( double, double );
+static void dccon2 ( double *, double *, double *, double, double );
+static void ua ( double, double, double, double, double, double, double [] );
+static void ub ( double, double, double, double, double, double, double [] );
+static void uc ( double, double, double, double, double, double, double, double [] );
 
 /* C0 */
 static double ALP[5];
@@ -31,49 +32,65 @@ static double EY, EZ, FY, FZ, GY, GZ, HY, HZ;
 
 /**/
 int disloc3d (
-	FAULT_MODEL model,
-	STA_COOR station,
-	double mu,
-	double nu,
+	FAULT_MODEL *model,
+	STA_COOR *station,
+	const double mu,
+	const double nu,
 	double u[3],
 	double d[9],
 	double s[6]
 ) {
+	double tmp = (model->strike - 90.0) * DEG2RAD;
+
 	const double lambda  = mu * nu / (0.5 - nu); /* Origin: 2.0*mu*nu/(1.0-2.0*nu) */
-	const double alpha   = (lambda + mu) / (lambda + 2.0 * mu);
-	const double strike  = (model.strike - 90.0) * DEG2RAD;
-	const double cos_s   = cos(strike);
-	const double sin_s   = sin(strike);
-	const double cos_d   = cos(model.dip * DEG2RAD);
-	const double sin_d   = sin(model.dip * DEG2RAD);
-	const double al      = model.length * 0.5;
-	const double aw      = model.width * 0.5;
-	const double depth   = model.depth - aw * sin_d;
-	const double x       = cos_s * (-model.east + station.x) - sin_s * (-model.north + station.y);
-	const double y       = -0.5 * cos_d * model.width + sin_s * (-model.east + station.x) + cos_s * (-model.north + station.y);
+	const double cos_s   = cos(tmp);
+	const double sin_s   = sin(tmp);
+	const double al      = model->length * 0.5;
+	const double aw      = model->width * 0.5;
+
+	tmp = model->dip * DEG2RAD;
+	const double sin_d   = sin(tmp);
 
 	double uu[12] = { 0.0 };
 
-	if ( (model.depth - sin_d * model.width) < -L_EPSILON ||
-		model.length < DBL_EPSILON ||
-		model.width < DBL_EPSILON ||
-		model.depth < 0.0 )
+
+	if ( (model->depth - sin_d * model->width) < -L_EPSILON ||
+		model->length < DBL_EPSILON ||
+		model->width < DBL_EPSILON ||
+		model->depth < 0.0 )
 	{
 		fprintf(stderr, "disloc3d: Unphysical model!\n");
 		return -1;
 	}
 
 /* */
-	if ( dc3d( alpha, x, y, station.z, depth, model.dip, al, al, aw, aw, model.disl1, model.disl2, model.disl3,
-		&uu[0], &uu[1], &uu[2], &uu[3], &uu[4], &uu[5], &uu[6], &uu[7], &uu[8], &uu[9], &uu[10], &uu[11] ) );
-		//fprintf(stderr, "disloc3d: Singular result!\n");
+	dc3d(
+	/* alpha */
+		(lambda + mu) / (lambda + 2.0 * mu),
+	/* x */
+		cos_s * (-model->east + station->x) - sin_s * (-model->north + station->y),
+	/* y */
+		-0.5 * cos(tmp) * model->width + sin_s * (-model->east + station->x) + cos_s * (-model->north + station->y),
+	/* z */
+		station->z,
+	/* depth */
+		model->depth - aw * sin_d,
+	/* dip */
+		model->dip,
+	/* length 1 & 2 */
+		al, al,
+	/* width 1 & 2 */
+		aw, aw,
+	/* dislocation 1, 2, 3 */
+		model->disl1, model->disl2, model->disl3,
+	/* output array */
+		uu
+	);
 
 /* */
 	u[0] = cos_s * uu[0] + sin_s * uu[1];
 	u[1] = -sin_s * uu[0] + cos_s * uu[1];
 	u[2] = uu[2];
-
-	//printf("%le %le %le\n", u[0], u[1], u[2]);
 
 /**/
 	d[0] = cos_s * cos_s * uu[3] + cos_s * sin_s * (uu[4] + uu[6]) + sin_s * sin_s * uu[7];
@@ -102,123 +119,117 @@ int disloc3d (
 
 /**/
 int dc3d (
-	const double _alpha,
-	double _x, double _y, double z,
-	double _depth, double _dip, double _al1, double _al2, double _aw1, double _aw2,
-	double _disl1, double _disl2, double _disl3,
+	const double alpha,
+	double x, double y, double z,
+	double depth, double dip, double al1, double al2, double aw1, double aw2,
+	double disl1, double disl2, double disl3,
 	double u[12]
 /*
 	*_ux, *_uy, *_uz, *_uxx, *_uyx, *_uzx,
 	*_uxy, *_uyy, *_uzy, *_uxz, *_uyz, *_uzz
 */
 ) {
-	int i, j, k, ii;
+	int i, j, k;
 	int flag1 = 0, flag2 = 0;
 
-	double _d, _p, _q;
-	double _et, xi;
-	double _u[12] = { 0.0 };
-	double du[12] = { 0.0 };
-	double _dua[12] = { 0.0 };
-	double _dub[12] = { 0.0 };
-	double _duc[12] = { 0.0 };
+	double d, p, q;
+	double et, xi;
+
+	double du[12]  = { 0.0 };
+	double dua[12] = { 0.0 };
+	double dub[12] = { 0.0 };
+	double duc[12] = { 0.0 };
 
 /**/
-	if ( _z > 0.0 ) fprintf(stderr, "dc3d: Positive Z was given!\n");
+	if ( z > 0.0 ) fprintf(stderr, "dc3d: Positive Z was given!\n");
 /**/
-	dccon0( _alpha, _dip );
+	dccon0( alpha, dip );
+/**/
+	memset(u, 0, sizeof(double)*12);
+/**/
+	d = depth + z;
+	p = y * CD + d * SD;
+	q = y * SD - d * CD;
+
+	xi = (x + al1) * (x - al2);
+	et = (p + aw1) * (p - aw2);
+	if ( xi < 0.0 || fabs(xi) < DBL_EPSILON ) flag1 = 1;
+	if ( et < 0.0 || fabs(et) < DBL_EPSILON ) flag2 = 1;
 
 /**/
-	_d = _depth + _z;
-	_p = _y * CD + _d * SD;
-	_q = _y * SD - _d * CD;
-
-	if ( (_x + _al1)*(_x - _al2) <= 0.0 ) flag1 = 1;
-	if ( (_p + _aw1)*(_p - _aw2) <= 0.0 ) flag2 = 1;
-
-/**/
-	for ( k = 0; k < 2; k++ ) {
-		if ( k == 0 ) _et = _p + _aw1;
-		else _et = _p - _aw2;
+	for ( k = 0, et = p + aw1; k < 2; k++ ) {
+		if ( k > 0 ) et = p - aw2;
 	/**/
-		for ( j = 0; j < 2; j++ ) {
-			if ( j == 0 ) _xi = _x + _al1;
-			else _xi = _x - _al2;
+		for ( j = 0, xi = x + al1; j < 2; j++ ) {
+			if ( j > 0 ) xi = x - al2;
 		/**/
-			dccon2( &_xi, &_et, &_q, SD, CD );
+			dccon2( &xi, &et, &q, SD, CD );
 		/**/
-			if ( (flag1 && fabs(_q) < DBL_EPSILON && fabs(_et) < DBL_EPSILON) ||
-				(flag2 && fabs(_q) < DBL_EPSILON && fabs(_xi) < DBL_EPSILON) )
+			if ( (flag1 && fabs(q) < DBL_EPSILON && fabs(et) < DBL_EPSILON) ||
+				(flag2 && fabs(q) < DBL_EPSILON && fabs(xi) < DBL_EPSILON) )
 				goto singular;
 		/**/
-			ua( _xi, _et, _q, _disl1, _disl2, _disl3, _dua );
-		/**/
-			ii = 0;
-			for ( i = 0; i < 4; i++ ) {
-				_du[ii] = -_dua[ii];
-				ii++;
-				_du[ii] = -_dua[ii]*CD + _dua[ii+1]*SD;
-				ii++;
-				_du[ii] = -_dua[ii-1]*SD - _dua[ii]*CD;
-				ii++;
-			}
-		/**/
-			_du[ 9] = -_du[9];
-			_du[10] = -_du[10];
-			_du[11] = -_du[11];
+			ua( xi, et, q, disl1, disl2, disl3, dua );
 		/**/
 			for ( i = 0; i < 12; i++ ) {
-				if ( j + k != 1 )
-					_u[i] += _du[i];
-				if ( j + k == 1 )
-					_u[i] -= _du[i];
+				du[i] = -dua[i];
+				i++;
+				du[i] = -dua[i] * CD + dua[i+1] * SD;
+				i++;
+				du[i] = -dua[i-1] * SD - dua[i] * CD;
+			}
+		/**/
+			du[ 9] = -du[ 9];
+			du[10] = -du[10];
+			du[11] = -du[11];
+		/**/
+			for ( i = 0; i < 12; i++ ) {
+				if ( (j + k) == 1 )
+					u[i] -= du[i];
+				else
+					u[i] += du[i];
 			}
 		}
 	}
 
 /**/
-	_d = _depth - _z;
-	_p = _y * CD + _d * SD;
-	_q = _y * SD - _d * CD;
+	d = depth - z;
+	p = y * CD + d * SD;
+	q = y * SD - d * CD;
 /**/
-	for ( k = 0; k < 2; k++ ) {
-		if ( k == 0 ) _et = _p + _aw1;
-		else _et = _p - _aw2;
+	for ( k = 0, et = p + aw1; k < 2; k++ ) {
+		if ( k > 0 ) et = p - aw2;
 	/**/
-		for ( j = 0; j < 2; j++ ) {
-			if ( j == 0 ) _xi = _x + _al1;
-			else _xi = _x - _al2;
+		for ( j = 0, xi = x + al1; j < 2; j++ ) {
+			if ( j > 0 ) xi = x - al2;
 		/**/
-			dccon2( &_xi, &_et, &_q, SD, CD );
+			dccon2( &xi, &et, &q, SD, CD );
 		/**/
-			ua( _xi, _et, _q, _disl1, _disl2, _disl3, _dua );
-			ub( _xi, _et, _q, _disl1, _disl2, _disl3, _dub );
-			uc( _xi, _et, _q, _z, _disl1, _disl2, _disl3, _duc );
-		/**/
-			ii = 0;
-			for ( i = 0; i < 4; i++ ) {
-				_du[ii] = _dua[ii] + _dub[ii] + _z*_duc[ii];
-				ii++;
-				_du[ii] = (_dua[ii] + _dub[ii] + _z*_duc[ii])*CD - (_dua[ii+1] + _dub[ii+1] + _z*_duc[ii+1])*SD;
-				ii++;
-				_du[ii] = (_dua[ii-1] + _dub[ii-1] - _z*_duc[ii-1])*SD + (_dua[ii] + _dub[ii] - _z*_duc[ii])*CD;
-				ii++;
-			}
-		/**/
-			_du[ 9] += _duc[0];
-			_du[10] += _duc[1]*CD - _duc[2]*SD;
-			_du[11] -= _duc[1]*SD + _duc[2]*CD;
+			ua( xi, et, q, disl1, disl2, disl3, dua );
+			ub( xi, et, q, disl1, disl2, disl3, dub );
+			uc( xi, et, q, z, disl1, disl2, disl3, duc );
 		/**/
 			for ( i = 0; i < 12; i++ ) {
-				if ( j + k != 1 )
-					_u[i] += _du[i];
-				if ( j + k == 1 )
-					_u[i] -= _du[i];
+				du[i] = dua[i] + dub[i] + z * duc[i];
+				i++;
+				du[i] = (dua[i] + dub[i] + z * duc[i]) * CD - (dua[i+1] + dub[i+1] + z * duc[i+1]) * SD;
+				i++;
+				du[i] = (dua[i-1] + dub[i-1] - z * duc[i-1]) * SD + (dua[i] + dub[i] - z * duc[i]) * CD;
+			}
+		/**/
+			du[ 9] += duc[0];
+			du[10] += duc[1] * CD - duc[2] * SD;
+			du[11] -= duc[1] * SD + duc[2] * CD;
+		/**/
+			for ( i = 0; i < 12; i++ ) {
+				if ( (j + k) == 1 )
+					u[i] -= du[i];
+				else
+					u[i] += du[i];
 			}
 		}
 	}
 
-	memcpy(u, _u, sizeof(double)*12);
 	return 0;
 
 singular:
@@ -339,7 +350,7 @@ static void ub ( double xi, double et, double q, double disl1, double disl2, dou
 	const double qy =  q * Y11;
 
 	const double ir  = 1.0 / R;
-	const double ir3 = ir * ir * ir;
+	const double ir3 = 1.0 / R3;
 	const double rd  = R + D;
 	const double ird = 1.0 / rd;
 	const double d11 = ir * ird;
@@ -506,7 +517,7 @@ static void uc ( double xi, double et, double q, double z, double disl1, double 
 	/* cdr = (c + D) / R3 */
 	const double cdrs = tmp1 * sdr3;
 	const double cdrc = tmp1 * cdr3;
-	const double yy0 = Y * ir3 - y0 * CD;
+	const double yy0  = Y * ir3 - y0 * CD;
 
 /**/
 	memset(u, 0, sizeof(double)*12);
@@ -515,71 +526,82 @@ static void uc ( double xi, double et, double q, double z, double disl1, double 
 	if ( fabs(disl1) > DBL_EPSILON ) {
 	/**/
 		tmp1 = ALP[3] * CD;
-		du[0] = tmp1 * xy                           - ALP[4] * xi * q * z32;
-		du[1] = tmp1 * ir + ALP[3] * 2.0 * qy * SD) - ALP[4] * c * q * ir3;
-		du[2] = tmp1 * qy                           - ALP[4] * (c * et * ir3 - z * Y11 + XI2 * z32);
+		tmp2 = ALP[3] * 2.0 * SD;
+		du[0] = tmp1 * xy             - ALP[4] * xi * q * z32;
+		du[1] = tmp1 * ir + tmp2 * qy - ALP[4] * c * q * ir3;
+		du[2] = tmp1 * qy             - ALP[4] * (c * et * ir3 - z * Y11 + XI2 * z32);
 	/**/
-		du[3] = tmp1 * y0                                        - ALP[4] * q * z0;
-		du[4] = -xi * (tmp1 * ir3 + ALP[3] * 2.0 * q * Y32 * SD) + ALP[4] * cqr * xi;
-		du[5] = -tmp1 * xi * q * Y32                             + ALP[4] * xi * (3.0 * c * et * ir5 - qq);
+		du[3] = tmp1 * y0                           - ALP[4] * q * z0;
+		du[4] = -xi * (tmp1 * ir3 + tmp2 * q * Y32) + ALP[4] * cqr * xi;
+		du[5] = -tmp1 * xi * q * Y32                + ALP[4] * xi * (3.0 * c * et * ir5 - qq);
 	/**/
-		du[6] = -tmp1 * xppy                                     - ALP[4] * xqqy;
-		du[7] = ALP[3] * 2.0 * (D * sdr3 - y0 * SDSD) - Y * cdr3 - ALP[4] * (cdrs - et * ir3 - cqr * Y);
-		du[8] = -ALP[3] * q * ir3 + yy0 * SD                     + ALP[4] * (cdrc + cqr * D - (y0 * CD + q * z0) * SD);
+		tmp3 = q * z0;
+		du[6] = -tmp1 * xppy                          - ALP[4] * xqqy;
+		du[7] = tmp2 * (D * ir3 - y0 * SD) - Y * cdr3 - ALP[4] * (cdrs - et * ir3 - cqr * Y);
+		du[8] = -ALP[3] * q * ir3 + yy0 * SD          + ALP[4] * (cdrc + cqr * D - y0 * SDCD - tmp3 * SD);
 	/**/
-		du[9]  = tmp1 * xppz                                      - ALP[4] * xqqz;
-		du[10] = ALP[3] * 2.0 * (Y * sdr3 - y0 * SDCD) + D * cdr3 - ALP[4] * (cdrc + cqr * D);
-		du[11] = yy0 * CD                                         - ALP[4] * (cdrs - cqr * Y - y0 * SDSD + q * z0 * CD);
+		du[9]  = tmp1 * xppz           - ALP[4] * xqqz;
+		du[10] = tmp2 * yy0 + D * cdr3 - ALP[4] * (cdrc + cqr * D);
+		du[11] = yy0 * CD              - ALP[4] * (cdrs - cqr * Y - y0 * SDSD + tmp3 * CD);
 	/**/
-		tmp = disl1 / PI_D;
-		for( i = 0; i < 12; i++ ) u[i] += tmp * du[i];
+		tmp1 = disl1 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 /**/
 	if ( fabs(disl2) > DBL_EPSILON ) {
 	/**/
-		du[0] = ALP[3] * CD * ir - qy * SD - ALP[4] * c * q * ir3;
-		du[1] = ALP[3] * Y * X11           - ALP[4] * c * et * q * X32;
-		du[2] = -D * X11 - xy * SD         - ALP[4] * c * (X11 - Q2 * X32);
+		tmp1 = ALP[4] * c;
+		du[0] = ALP[3] * CD * ir - qy * SD - tmp1 * q * ir3;
+		du[1] = ALP[3] * Y * X11           - tmp1 * et * q * X32;
+		du[2] = -D * X11 - xy * SD         - tmp1 * (X11 - Q2 * X32);
 	/**/
-		du[3] = -ALP[3] * xi * cdr3 + ALP[4] * cqr * xi + xi * q * Y32 * SD;
-		du[4] = -ALP[3] * Y * ir3   + ALP[4] * cqr * et;
-		du[5] = D * ir3 - y0 * SD   + ALP[4] * c * ir3 * (1.0 - 3.0 * Q2 * ir2);
+		tmp2 = ALP[4] * cqr;
+		du[3] = -ALP[3] * cdr3      + tmp2 + q * Y32 * SD, du[3] *= xi;
+		du[4] = -ALP[3] * Y * ir3   + tmp2 * et;
+		du[5] = D * ir3 - y0 * SD   + tmp1 * (ir3 - 3.0 * Q2 * ir5);
 	/**/
-		du[6] = -ALP[3] * et * ir3 + y0 * SDSD - ALP[4] * (cdrs - cqr * Y);
-		du[7] = ALP[3] * (X11 - Y * Y * X32)   - ALP[4] * c * ((D + 2.0 * q * CD) * X32 - Y * et * qx53);
-		du[8] = xppy * SD + Y * D * X32        + ALP[4] * c * ((Y + 2.0 * q * SD) * X32 - Y * q * qx53);
+		tmp3 = 2.0 * q * X32;
+		double tmp4 = Y * X32;
+		double tmp5 = D * X32;
+		du[6] = -ALP[3] * et * ir3 + y0 * SDSD - ALP[4] * cdrs - tmp2 * Y;
+		du[7] = ALP[3] * (X11 - Y * tmp4)      - tmp1 * (tmp5 + tmp3 * CD - Y * et * qx53);
+		du[8] = xppy * SD + D * tmp4           + tmp1 * (tmp4 + tmp3 * SD - Y * q * qx53);
 	/**/
-		du[9]  = -q * ir3 + y0 * SDCD           - ALP[4] * (cdrc + cqr * D);
-		du[10] = ALP[3] * Y * D * X32           - ALP[4] * c * ((Y - 2.0 * q * SD) * X32 + D * et * qx53);
-		du[11] = -xppz * SD + X11 - D * D * X32 - ALP[4] * c * ((D - 2.0 * q * CD) * X32 - D * q * qx53);
+		du[9]  = -q * ir3 + y0 * SDCD        - ALP[4] * cdrc + tmp2 * D;
+		du[10] = ALP[3] * Y * tmp5           - tmp1 * (tmp4 - tmp3 * SD + D * et * qx53);
+		du[11] = -xppz * SD + X11 - D * tmp5 - tmp1 * (tmp5 - tmp3 * CD - D * q * qx53);
 	/**/
-		tmp = disl2 / PI_D;
-		for( i = 0; i < 12; i++ ) u[i] += tmp * du[i];
+		tmp1 = disl2 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 /**/
 	if ( fabs(disl3) > DBL_EPSILON ) {
-		tmp = ALP[4] * c;
+		tmp1 = ALP[3] * 2.0 * SD;
+		tmp2 = ALP[4] * c;
 	/**/
-		du[0] = -ALP[3] * (SD * ir + qy * CD)    - ALP[4] * (z * Y11 - Q2 * z32);
-		du[1] = ALP[3] * 2.0 * xy * SD + D * X11 - ALP[4] * c * (X11 - Q2 * X32);
-		du[2] = ALP[3] * (Y * X11 + xy * CD)     + ALP[4] * q * (c * et * X32 + xi * z32);
+		du[0] = -ALP[3] * (SD * ir + qy * CD) - ALP[4] * (z * Y11 - Q2 * z32);
+		du[1] = tmp1 * xy + D * X11           - tmp2 * (X11 - Q2 * X32);
+		du[2] = ALP[3] * (Y * X11 + xy * CD)  + ALP[4] * q * (c * et * X32 + xi * z32);
 	/**/
-		du[3] = ALP[3] * xi * ir3 * SD + xi * q * Y32 * CD + ALP[4] * xi * (3.0 * c * et * ir5 - 2.0 * z32 - z0);
-		du[4] = ALP[3] * 2.0 * y0 * SD - D * ir3           + ALP[4] * c * ir3 * (1.0 - 3.0 * Q2 * ir2);
-		du[5] = -ALP[3] * yy0                              - ALP[4] * (cqr * et - q * z0);
+		du[3] = ALP[3] * sdr3 + q * Y32 * CD + ALP[4] * (3.0 * c * et * ir5 - 2.0 * z32 - z0), du[3] *= xi;
+		du[4] = tmp1 * y0 - D * ir3          + tmp2 * (ir3 - 3.0 * Q2 * ir5);
+		du[5] = -ALP[3] * yy0                - ALP[4] * (cqr * et - q * z0);
 	/**/
-		du[6] = ALP[3] * (q * ir3 + y0 * SDCD)            + ALP[4] * (z * ir3 * CD + cqr * D - q * z0 * SD);
-		du[7] = -ALP[3] * 2.0 * xppy * SD - Y * D * X32   + ALP[4] * c * ((Y + 2.0 * q * SD) * X32 - Y * q * qx53);
-		du[8] = -ALP[3] * (xppy * CD - X11 + Y * Y * X32) + ALP[4] * (c * ((D + 2.0 * q * CD) * X32 - Y * et * qx53) + xqqy);
+		tmp3 = 2.0 * q * X32;
+		double tmp4 = Y * X32;
+		double tmp5 = D * X32;
+		du[6] = ALP[3] * (q * ir3 + y0 * SDCD)         + ALP[4] * (z * cdr3 + cqr * D - q * z0 * SD);
+		du[7] = -tmp1 * xppy - D * tmp4                + tmp2 * (tmp4 + tmp3 * SD - Y * q * qx53);
+		du[8] = -ALP[3] * (xppy * CD - X11 + Y * tmp4) + tmp2 * (tmp5 + tmp3 * CD - Y * et * qx53) + ALP[4] * xqqy;
 	/**/
-		du[9]  = -et * ir3 + y0 * CDCD                        - ALP[4] * (z * ir3 * SD - cqr * Y - y0 * SDSD + q * z0 * CD);
-		du[10] = ALP[3] * 2.0 * xppz * SD - X11 + D * D * X32 - ALP[4] * c * ((D - 2.0 * q * CD) * X32 - D * q * qx53);
-		du[11] = ALP[3] * (xppz * CD + Y * D * X32)           + ALP[4] * (c * ((Y - 2.0 * q * SD) * X32 + D * et * qx53) + xqqz);
+		du[9]  = -et * ir3 + y0 * CDCD           - ALP[4] * (z * sdr3 - cqr * Y - y0 * SDSD + q * z0 * CD);
+		du[10] = tmp1 * xppz - X11 + D * tmp5    - tmp2 * (tmp5 - tmp3 * CD - D * q * qx53);
+		du[11] = ALP[3] * (xppz * CD + Y * tmp5) + tmp2 * (tmp4 - tmp3 * SD + D * et * qx53) + ALP[4] * xqqz;
 	/**/
-		tmp = disl3 / PI_D;
-		for( i = 0; i < 12; i++ ) u[i] += tmp * du[i];
+		tmp1 = disl3 / PI_D;
+		for( i = 0; i < 12; i++ ) u[i] += tmp1 * du[i];
 	}
 
 	return;

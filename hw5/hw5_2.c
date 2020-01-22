@@ -14,7 +14,7 @@
 #define  ORIGIN_LAT    23.0l
 #define  ORIGIN_LON   120.7l
 
-static FAULT_MODEL faultg2faultm( const FAULT_GEOM, const double, const double, const double );
+static FAULT_MODEL *faultmodel_gen( const FAULT_GEOM *, const double, const double, const double );
 
 static double weighting_gen( const double );
 
@@ -105,11 +105,18 @@ int main( int argc, char **argv )
 	g = matrix_new( StaCount*3, npatches*2 );
 /* Generating Green's function */
 	for ( j = 0; j < npatches; j++ ) {
+	/**/
+		FAULT_MODEL *f1 = faultmodel_gen( faultp, 1.0, 0.0, 0.0 );
+		FAULT_MODEL *f2 = faultmodel_gen( faultp, 0.0, 1.0, 0.0 );
+	/**/
 		for ( i = 0; i < StaCount; i++ ) {
-			disloc3d( faultg2faultm( faultp[j], 1.0, 0.0, 0.0 ) ,StaCoor[i], 1.0, 0.25, us+i*3, dd, ss );
-			disloc3d( faultg2faultm( faultp[j], 0.0, 1.0, 0.0 ) ,StaCoor[i], 1.0, 0.25, ud+i*3, dd, ss );
+			disloc3d( f1 ,StaCoor+i, 1.0, 0.25, us+i*3, dd, ss );
+			disloc3d( f2 ,StaCoor+i, 1.0, 0.25, ud+i*3, dd, ss );
 			//printf("%le %le %.le\n", (us+i*3)[0], (us+i*3)[1], (us+i*3)[2]);
 		}
+	/**/
+		free(f1);
+		free(f2);
 	/* Assign the g matrix */
 		matrix_assign_col( g, us, j+1, StaCount*3 );
 		matrix_assign_col( g, ud, npatches+j+1, StaCount*3 );
@@ -239,20 +246,20 @@ static int arg_parse( int argc, char **argv ) {
 	return 0;
 }
 
-static FAULT_MODEL faultg2faultm( const FAULT_GEOM faultg, const double disl1, const double disl2, const double disl3 )
+static FAULT_MODEL *faultmodel_gen( const FAULT_GEOM *faultg, const double disl1, const double disl2, const double disl3 )
 {
-	FAULT_MODEL ret;
+	FAULT_MODEL *ret = (FAULT_MODEL *)malloc(sizeof(FAULT_MODEL));
 
-	ret.length = faultg.length;
-	ret.width = faultg.width;
-	ret.depth = faultg.depth;
-	ret.dip = faultg.dip;
-	ret.strike = faultg.strike;
-	ret.east = faultg.east;
-	ret.north = faultg.north;
-	ret.disl1 = disl1;
-	ret.disl2 = disl2;
-	ret.disl3 = disl3;
+	ret->length = faultg->length;
+	ret->width  = faultg->width;
+	ret->depth  = faultg->depth;
+	ret->dip    = faultg->dip;
+	ret->strike = faultg->strike;
+	ret->east   = faultg->east;
+	ret->north  = faultg->north;
+	ret->disl1  = disl1;
+	ret->disl2  = disl2;
+	ret->disl3  = disl3;
 
 	return ret;
 }

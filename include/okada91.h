@@ -20,8 +20,7 @@ typedef struct {
 } STA_COOR;
 
 /* */
-int disloc3d( FAULT_MODEL, STA_COOR, double, double, double [], double [], double [] );
+int disloc3d ( FAULT_MODEL *, STA_COOR *, double, double, double [], double [], double [] );
 /* */
-int dc3d( double, double, double, double, double, double, double, double,
-	double, double, double, double, double, double *, double *, double *, double *,
-	double *, double *, double *, double *, double *, double *, double *, double * );
+int dc3d ( double, double, double, double, double, double, double, double,
+	double, double, double, double, double, double [] );

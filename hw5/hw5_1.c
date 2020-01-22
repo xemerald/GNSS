@@ -10,7 +10,7 @@
 #include <okada91.h>
 #include <faultgeom.h>
 
-static FAULT_MODEL faultg2faultm( const FAULT_GEOM, const double, const double, const double );
+static FAULT_MODEL *faultmodel_gen( const FAULT_GEOM *, const double, const double, const double );
 
 static int arg_parse( int, char ** );
 static int stacoor_file_parse( const char *);
@@ -94,12 +94,18 @@ int main( int argc, char **argv )
 						fault2patch( transfault_bottom( (FAULT_GEOM){ length, depth/sin(dip*DEG2RAD), 0.0, -180.0+dip, strike, east, north } ), 1, 1, &faultp );
 						//printf("%lf %lf %lf %lf %lf %lf %lf\n", faultp->length, faultp->width, faultp->depth, faultp->dip, faultp->strike, faultp->east, faultp->north);
 
+						FAULT_MODEL *f1 = faultmodel_gen( faultp, 1.0, 0.0, 0.0 );
+						FAULT_MODEL *f2 = faultmodel_gen( faultp, 0.0, 1.0, 0.0 );
+
 						for ( i = 0; i < StaCount; i++ ) {
-							disloc3d( faultg2faultm( faultp[0], 1.0, 0.0, 0.0 ) ,StaCoor[i], 1.0, 0.25, us+i*3, dd, ss );
-							disloc3d( faultg2faultm( faultp[0], 0.0, 1.0, 0.0 ) ,StaCoor[i], 1.0, 0.25, ud+i*3, dd, ss );
+							disloc3d( f1 ,StaCoor+i, 1.0, 0.25, us+i*3, dd, ss );
+							disloc3d( f2 ,StaCoor+i, 1.0, 0.25, ud+i*3, dd, ss );
 
 							//printf("%.20lf %.20lf %.20lf\n", (us+i*3)[0], (us+i*3)[1], (us+i*3)[2]);
 						}
+
+						free(f1);
+						free(f2);
 
 						matrix_assign_col( g, us, 1, StaCount*3 );
 						matrix_assign_col( g, ud, 2, StaCount*3 );
@@ -181,20 +187,20 @@ static int arg_parse( int argc, char **argv ) {
 	return 0;
 }
 
-static FAULT_MODEL faultg2faultm( const FAULT_GEOM faultg, const double disl1, const double disl2, const double disl3 )
+static FAULT_MODEL *faultmodel_gen( const FAULT_GEOM *faultg, const double disl1, const double disl2, const double disl3 )
 {
-	FAULT_MODEL ret;
+	FAULT_MODEL *ret = (FAULT_MODEL *)malloc(sizeof(FAULT_MODEL));
 
-	ret.length = faultg.length;
-	ret.width = faultg.width;
-	ret.depth = faultg.depth;
-	ret.dip = faultg.dip;
-	ret.strike = faultg.strike;
-	ret.east = faultg.east;
-	ret.north = faultg.north;
-	ret.disl1 = disl1;
-	ret.disl2 = disl2;
-	ret.disl3 = disl3;
+	ret->length = faultg->length;
+	ret->width  = faultg->width;
+	ret->depth  = faultg->depth;
+	ret->dip    = faultg->dip;
+	ret->strike = faultg->strike;
+	ret->east   = faultg->east;
+	ret->north  = faultg->north;
+	ret->disl1  = disl1;
+	ret->disl2  = disl2;
+	ret->disl3  = disl3;
 
 	return ret;
 }
